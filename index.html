@@ -123,7 +123,7 @@
       { id: 'w4', name: 'Zeus', cost: { clay: 1, wood: 1, stone: 1, papyrus: 2 }, pts: 3, mil: 1 },
       { id: 'w5', name: 'Mausoleum', cost: { clay: 2, glass: 2, papyrus: 1 }, pts: 2 },
       { id: 'w6', name: 'Colossus', cost: { clay: 3, glass: 1 }, pts: 3, mil: 2 },
-      { id: 'w7', name: 'Library', cost: { wood: 3, glass: 1, papyrus: 1 }, pts: 4 },
+      { id: 'w7', name: 'Great Library', cost: { wood: 3, glass: 1, papyrus: 1 }, pts: 4 },
       { id: 'w8', name: 'Circus Max', cost: { glass: 1, wood: 1, stone: 2 }, pts: 3, mil: 1 },
       { id: 'w9', name: 'Piraeus', cost: { clay: 1, stone: 1, wood: 2 }, pts: 2, extraTurn: true },
       { id: 'w10', name: 'Appian Way', cost: { papyrus: 1, clay: 2, stone: 2 }, pts: 3, coins: 3, extraTurn: true },
@@ -148,6 +148,7 @@
 
     function shuffle(arr) { return arr.slice().sort(function() { return Math.random() - 0.5; }); }
     
+    // Age 1: 2 cards at top, expanding to 6 at bottom
     function buildAge1(cards) {
       var s = shuffle(cards).slice(0, 20), pyr = [], idx = 0;
       for (var c = 0; c < 2; c++) pyr.push({ r: 0, c: c, card: s[idx++], t: false });
@@ -157,15 +158,18 @@
       for (var c = 0; c < 6; c++) pyr.push({ r: 4, c: c, card: s[idx++], t: false });
       return pyr;
     }
+    
+    // Age 2: 2 cards at top, expanding to 6 at bottom (SAME structure as Age 1, but accessible from TOP)
     function buildAge2(cards) {
       var s = shuffle(cards).slice(0, 20), pyr = [], idx = 0;
-      for (var c = 0; c < 6; c++) pyr.push({ r: 0, c: c, card: s[idx++], t: false });
-      for (var c = 0; c < 5; c++) pyr.push({ r: 1, c: c, card: s[idx++], t: false });
+      for (var c = 0; c < 2; c++) pyr.push({ r: 0, c: c, card: s[idx++], t: false });
+      for (var c = 0; c < 3; c++) pyr.push({ r: 1, c: c, card: s[idx++], t: false });
       for (var c = 0; c < 4; c++) pyr.push({ r: 2, c: c, card: s[idx++], t: false });
-      for (var c = 0; c < 3; c++) pyr.push({ r: 3, c: c, card: s[idx++], t: false });
-      for (var c = 0; c < 2; c++) pyr.push({ r: 4, c: c, card: s[idx++], t: false });
+      for (var c = 0; c < 5; c++) pyr.push({ r: 3, c: c, card: s[idx++], t: false });
+      for (var c = 0; c < 6; c++) pyr.push({ r: 4, c: c, card: s[idx++], t: false });
       return pyr;
     }
+    
     function buildAge3(cards, guilds) {
       var sg = shuffle(guilds).slice(0, 3);
       var all = shuffle(cards.concat(sg)).slice(0, 20), pyr = [], idx = 0;
@@ -219,17 +223,20 @@
       return { total: total, bd: parts.length > 0 ? parts.join('+') : 'Free' };
     }
     
-    // FIX: Card is accessible (and should be face-up) based on position
+    // Card accessibility - Age 1: bottom row free, Age 2: top row free
     function isAcc(pyr, pos, age) {
       if (pos.t) return false;
       var r = pos.r, c = pos.c;
       if (age === 1) {
+        // Age 1: accessible from bottom (row 4), cards covered by row below
         if (r === 4) return true;
         return pyr.filter(function(p) { return !p.t && p.r === r + 1 && (p.c === c || p.c === c + 1); }).length === 0;
       } else if (age === 2) {
+        // Age 2: accessible from top (row 0), cards covered by row above
         if (r === 0) return true;
         return pyr.filter(function(p) { return !p.t && p.r === r - 1 && (p.c === c || p.c === c - 1); }).length === 0;
       } else {
+        // Age 3: hourglass, accessible from top corners
         if (r === 0) return true;
         return pyr.filter(function(p) { return !p.t && p.r === r - 1 && Math.abs(p.c - c) <= 1; }).length === 0;
       }
@@ -335,9 +342,9 @@
         setSelWonder(null);
       }
 
-      function handleWonderClick(w, idx) {
-        if (aiThink || game.gameOver || (vsAI && game.turn !== 1) || w.built) return;
-        if (!sel) { setMsg('Select a card first to build wonder'); return; }
+      function handleWonderClick(w, idx, pNum) {
+        if (aiThink || game.gameOver || (vsAI && game.turn !== 1) || w.built || pNum !== game.turn) return;
+        if (!sel) { setMsg('Select a card first'); return; }
         setSelWonder(selWonder === idx ? null : idx);
       }
 
@@ -372,7 +379,7 @@
         wonder.built = true;
         if (wonder.coins) player.coins += wonder.coins;
         if (wonder.mil) g.mil = applyMil(g.mil, wonder.mil, g.turn);
-        sel.t = true; // consume the card
+        sel.t = true;
         setMsg('Built ' + wonder.name + '!');
         checkGameEnd(g);
         checkAgeEnd(g);
@@ -403,11 +410,49 @@
         );
       }
 
-      var cardW = 60, cardH = 82;
-      var overlapX = game.age === 3 ? 24 : 30;
-      var overlapY = game.age === 3 ? 14 : 18;
+      var cardW = 56, cardH = 76;
+      var overlapX = game.age === 3 ? 28 : 36;
+      var overlapY = game.age === 3 ? 22 : 28;
       var pyrW = 6 * overlapX + (cardW - overlapX) + 20;
       var pyrH = 5 * overlapY + (cardH - overlapY) + 10;
+
+      // Wonder display component with full details
+      function WonderCard(props) {
+        var w = props.w, idx = props.idx, pNum = props.pNum;
+        var isMyTurn = game.turn === pNum;
+        var canSelect = isMyTurn && sel && !w.built && !game.gameOver && (vsAI ? pNum === 1 : true);
+        var isSelected = selWonder === idx && pNum === game.turn;
+        var player = pNum === 1 ? game.p1 : game.p2;
+        var opp = pNum === 1 ? game.p2 : game.p1;
+        var ci = calcCost(w.cost, player, opp);
+        
+        var costStr = Object.keys(w.cost).map(function(k) { return w.cost[k] + RES[k]; }).join('');
+        var rewards = [];
+        if (w.pts) rewards.push(w.pts + '★');
+        if (w.coins) rewards.push('+' + w.coins + '💰');
+        if (w.mil) rewards.push('⚔'.repeat(w.mil));
+        if (w.extraTurn) rewards.push('🔄');
+        
+        return e('div', {
+          onClick: function() { handleWonderClick(w, idx, pNum); },
+          style: {
+            background: w.built ? 'linear-gradient(135deg, #5a4a2a, #3a2a1a)' : isSelected ? 'linear-gradient(135deg, #4a5a2a, #3a4a1a)' : 'linear-gradient(135deg, #3a2a1a, #2a1a0a)',
+            border: isSelected ? '2px solid #90ee90' : canSelect ? '2px solid #c9a227' : '1px solid #555',
+            borderRadius: 6,
+            padding: 6,
+            cursor: canSelect ? 'pointer' : 'default',
+            opacity: w.built ? 0.6 : 1,
+            minWidth: 90
+          }
+        },
+          e('div', { style: { fontSize: '0.7rem', fontWeight: 'bold', color: w.built ? '#888' : '#c9a227', marginBottom: 2 } }, 
+            w.built ? '✓ ' + w.name : w.name
+          ),
+          !w.built ? e('div', { style: { fontSize: '0.6rem', color: '#aaa', marginBottom: 2 } }, 'Cost: ' + costStr) : null,
+          !w.built ? e('div', { style: { fontSize: '0.6rem', color: ci.total <= player.coins ? '#8bc34a' : '#ff6b6b' } }, 'Buy: ' + ci.total + '💰') : null,
+          e('div', { style: { fontSize: '0.7rem', color: '#f4e4c1', marginTop: 2 } }, rewards.join(' ') || '-')
+        );
+      }
 
       function Panel(props) {
         var pNum = props.pNum;
@@ -415,50 +460,31 @@
         var prod = getProd(p.cards, p.wonders);
         var isAct = game.turn === pNum && !game.gameOver;
         var prodStr = Object.keys(prod).filter(function(k) { return prod[k] > 0; }).map(function(k) { return prod[k] + RES[k]; }).join(' ') || '-';
-        var isMyPanel = (vsAI && pNum === 1) || (!vsAI && game.turn === pNum);
         
-        return e('div', { style: { flex: 1, background: isAct ? 'rgba(201,162,39,0.15)' : 'rgba(0,0,0,0.2)', borderRadius: 4, padding: 4, border: isAct ? '2px solid #c9a227' : '1px solid #444' } },
-          e('div', { style: { display: 'flex', justifyContent: 'space-between', fontSize: '0.95rem', fontWeight: 'bold' } },
-            e('span', null, vsAI ? (pNum === 1 ? 'You' : '🤖AI') : 'P' + pNum),
+        return e('div', { style: { background: isAct ? 'rgba(201,162,39,0.15)' : 'rgba(0,0,0,0.2)', borderRadius: 6, padding: 6, border: isAct ? '2px solid #c9a227' : '1px solid #444', flex: 1 } },
+          e('div', { style: { display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: 4 } },
+            e('span', null, vsAI ? (pNum === 1 ? 'You' : '🤖 AI') : 'P' + pNum),
             e('span', null, p.coins + '💰')
           ),
-          e('div', { style: { fontSize: '0.8rem' } }, prodStr),
-          e('div', { style: { display: 'flex', gap: 2, flexWrap: 'wrap', marginTop: 2 } },
+          e('div', { style: { fontSize: '0.75rem', marginBottom: 6 } }, 'Produces: ' + prodStr),
+          e('div', { style: { fontSize: '0.7rem', fontWeight: 'bold', color: '#c9a227', marginBottom: 4 } }, 'Wonders:'),
+          e('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
             p.wonders.map(function(w, i) {
-              var canBuild = isMyPanel && sel && !w.built && isAct;
-              var isSelected = selWonder === i && pNum === game.turn;
-              return e('div', { 
-                key: i, 
-                onClick: function() { if (pNum === game.turn) handleWonderClick(w, i); },
-                style: { 
-                  width: 50, height: 28, 
-                  background: w.built ? '#c9a227' : isSelected ? '#6b8e23' : canBuild ? '#5a4a2a' : '#333', 
-                  borderRadius: 3, fontSize: '0.5rem', 
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: canBuild ? 'pointer' : 'default',
-                  border: isSelected ? '2px solid #90ee90' : canBuild ? '1px solid #c9a227' : '1px solid #555',
-                  color: w.built ? '#2c1810' : '#f4e4c1',
-                  flexDirection: 'column',
-                  padding: 1
-                } 
-              }, 
-                e('div', { style: { fontSize: '0.45rem', fontWeight: 'bold', textAlign: 'center', lineHeight: 1 } }, w.name.substring(0, 8)),
-                e('div', { style: { fontSize: '0.5rem' } }, w.built ? '✓ ' + w.pts + '★' : w.pts + '★')
-              );
+              return e(WonderCard, { key: i, w: w, idx: i, pNum: pNum });
             })
           ),
-          e('div', { style: { display: 'flex', gap: 2, flexWrap: 'wrap', marginTop: 2 } },
-            p.cards.slice(-6).map(function(c, i) {
-              return e('div', { key: i, style: { width: 16, height: 12, background: COLORS[c.type], borderRadius: 2 } });
+          e('div', { style: { display: 'flex', gap: 2, flexWrap: 'wrap', marginTop: 6 } },
+            p.cards.slice(-8).map(function(c, i) {
+              return e('div', { key: i, style: { width: 14, height: 10, background: COLORS[c.type], borderRadius: 2 } });
             }),
-            p.cards.length > 6 ? e('span', { style: { fontSize: '0.55rem' } }, '+' + (p.cards.length - 6)) : null
+            p.cards.length > 8 ? e('span', { style: { fontSize: '0.55rem' } }, '+' + (p.cards.length - 8)) : null
           )
         );
       }
 
       function Mil() {
         var mils = [-9, -6, -3, 0, 3, 6, 9];
-        return e('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '3px 0' } },
+        return e('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px 0' } },
           e('span', { style: { fontSize: '0.7rem', marginRight: 4 } }, vsAI ? 'AI' : 'P2'),
           mils.map(function(m) {
             var bg = game.mil === m ? '#c9a227' : Math.abs(m) >= 9 ? '#c41e3a' : Math.abs(m) >= 6 ? '#ff6b6b' : Math.abs(m) >= 3 ? '#ffa500' : '#555';
@@ -475,37 +501,45 @@
         var r = pos.r, c = pos.c, card = pos.card;
         var acc = isAcc(game.pyr, pos, game.age);
         var canClick = acc && !aiThink && (vsAI ? game.turn === 1 : true) && !game.gameOver;
-        
-        // FIX: Show face up if accessible, face down if not
         var showFace = acc;
         
         var x, y;
-        if (game.age === 1) { var rc = [2, 3, 4, 5, 6]; x = (6 * overlapX - rc[r] * overlapX) / 2 + c * overlapX; y = r * overlapY; }
-        else if (game.age === 2) { var rc = [6, 5, 4, 3, 2]; x = (6 * overlapX - rc[r] * overlapX) / 2 + c * overlapX; y = r * overlapY; }
-        else { x = c * overlapX; y = r * overlapY; }
+        if (game.age === 1) {
+          var rc = [2, 3, 4, 5, 6];
+          x = (6 * overlapX - rc[r] * overlapX) / 2 + c * overlapX;
+          y = r * overlapY;
+        } else if (game.age === 2) {
+          // Age 2: same visual structure as Age 1
+          var rc = [2, 3, 4, 5, 6];
+          x = (6 * overlapX - rc[r] * overlapX) / 2 + c * overlapX;
+          y = r * overlapY;
+        } else {
+          x = c * overlapX;
+          y = r * overlapY;
+        }
         
         var cardContent;
         if (showFace) {
           var costStr = Object.keys(card.cost).length === 0 ? 'Free' : Object.keys(card.cost).map(function(k) { return card.cost[k] + (RES[k] || k); }).join('');
-          var prodEl = card.prod ? e('div', { style: { background: 'rgba(0,0,0,0.3)', borderRadius: 2, padding: 1, fontSize: '0.75rem' } }, '+' + Object.keys(card.prod).map(function(k) { return card.prod[k] + RES[k]; }).join('')) : null;
-          var milEl = card.mil ? e('div', { style: { fontSize: '0.85rem' } }, '⚔'.repeat(card.mil)) : null;
-          var sciEl = card.sci ? e('div', { style: { fontSize: '0.95rem' } }, SCI[card.sci]) : null;
-          var ptsEl = card.pts > 0 ? e('div', { style: { fontSize: '0.85rem', fontWeight: 'bold' } }, card.pts + '★') : null;
-          var coinsEl = card.coins ? e('div', { style: { fontSize: '0.75rem' } }, '+' + card.coins + '💰') : null;
-          var tradeEl = card.fixedTrade ? e('div', { style: { fontSize: '0.6rem' } }, '1💰/' + (RES[card.fixedTrade] || '🔮📜')) : null;
-          var perEl = card.ptsPer ? e('div', { style: { fontSize: '0.55rem' } }, Object.keys(card.ptsPer).map(function(k) { return '★/' + k; }).join(' ')) : null;
+          var prodEl = card.prod ? e('div', { style: { background: 'rgba(0,0,0,0.3)', borderRadius: 2, padding: 1, fontSize: '0.65rem' } }, '+' + Object.keys(card.prod).map(function(k) { return card.prod[k] + RES[k]; }).join('')) : null;
+          var milEl = card.mil ? e('div', { style: { fontSize: '0.8rem' } }, '⚔'.repeat(card.mil)) : null;
+          var sciEl = card.sci ? e('div', { style: { fontSize: '0.9rem' } }, SCI[card.sci]) : null;
+          var ptsEl = card.pts > 0 ? e('div', { style: { fontSize: '0.75rem', fontWeight: 'bold' } }, card.pts + '★') : null;
+          var coinsEl = card.coins ? e('div', { style: { fontSize: '0.65rem' } }, '+' + card.coins + '💰') : null;
+          var tradeEl = card.fixedTrade ? e('div', { style: { fontSize: '0.5rem' } }, '1💰/' + (RES[card.fixedTrade] || '🔮📜')) : null;
+          var perEl = card.ptsPer ? e('div', { style: { fontSize: '0.5rem' } }, Object.keys(card.ptsPer).map(function(k) { return '★/' + k; }).join(' ')) : null;
           cardContent = [
-            e('div', { key: 'name', style: { fontSize: '0.7rem', fontWeight: 'bold', lineHeight: 1.1, textShadow: '1px 1px #000' } }, card.name.length > 8 ? card.name.substring(0, 7) + '…' : card.name),
-            e('div', { key: 'mid', style: { flex: 1, fontSize: '0.65rem' } }, prodEl, milEl, sciEl, ptsEl, coinsEl, tradeEl, perEl),
-            e('div', { key: 'cost', style: { fontSize: '0.55rem', background: 'rgba(0,0,0,0.4)', borderRadius: 2, padding: 1 } }, costStr)
+            e('div', { key: 'name', style: { fontSize: '0.55rem', fontWeight: 'bold', lineHeight: 1.1, textShadow: '1px 1px #000' } }, card.name.length > 9 ? card.name.substring(0, 8) + '…' : card.name),
+            e('div', { key: 'mid', style: { flex: 1, fontSize: '0.6rem' } }, prodEl, milEl, sciEl, ptsEl, coinsEl, tradeEl, perEl),
+            e('div', { key: 'cost', style: { fontSize: '0.5rem', background: 'rgba(0,0,0,0.4)', borderRadius: 2, padding: 1 } }, costStr)
           ];
         } else {
-          cardContent = e('div', { style: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem' } }, '?');
+          cardContent = e('div', { style: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' } }, '?');
         }
         
         return e('div', {
           onClick: function() { if (canClick) handleClick(pos); },
-          style: { position: 'absolute', left: x, top: y, width: cardW, height: cardH, background: showFace ? COLORS[card.type] : '#3a2a1a', border: sel === pos ? '3px solid gold' : acc ? '2px solid #c9a227' : '1px solid #555', borderRadius: 4, cursor: canClick ? 'pointer' : 'default', opacity: acc ? 1 : 0.6, display: 'flex', flexDirection: 'column', padding: 2, color: '#fff', zIndex: r * 10 + c, overflow: 'hidden', transform: sel === pos ? 'scale(1.05)' : 'scale(1)' }
+          style: { position: 'absolute', left: x, top: y, width: cardW, height: cardH, background: showFace ? COLORS[card.type] : '#3a2a1a', border: sel === pos ? '3px solid gold' : acc ? '2px solid #c9a227' : '1px solid #555', borderRadius: 4, cursor: canClick ? 'pointer' : 'default', opacity: acc ? 1 : 0.6, display: 'flex', flexDirection: 'column', padding: 2, color: '#fff', zIndex: r * 10 + c, overflow: 'hidden', transform: sel === pos ? 'scale(1.08)' : 'scale(1)' }
         }, cardContent);
       }
 
@@ -527,18 +561,17 @@
           canBuildWonder = wci.total <= player.coins;
         }
         
-        var prodEl = card.prod ? e('div', { style: { fontSize: '0.7rem', marginBottom: 4, color: '#8bc34a' } }, 'Produces: ' + Object.keys(card.prod).map(function(k) { return card.prod[k] + RES[k]; }).join(' ')) : null;
+        var prodEl = card.prod ? e('div', { style: { fontSize: '0.65rem', marginBottom: 3, color: '#8bc34a' } }, 'Prod: ' + Object.keys(card.prod).map(function(k) { return card.prod[k] + RES[k]; }).join(' ')) : null;
         
-        return e('div', { style: { background: 'rgba(0,0,0,0.85)', borderRadius: 6, padding: 6, minWidth: 120, border: '1px solid #c9a227' } },
-          e('div', { style: { fontWeight: 'bold', fontSize: '0.9rem', marginBottom: 3, color: COLORS[card.type] } }, card.name),
-          e('div', { style: { fontSize: '0.75rem', marginBottom: 4 } },
-            fc ? e('span', { style: { color: '#4caf50' } }, 'FREE (chain)') : e('span', { style: { color: canAff ? '#fff' : '#ff6b6b' } }, 'Cost: ' + ci.total + '💰'),
-            !fc && ci.bd !== 'Free' ? e('div', { style: { fontSize: '0.65rem', color: '#aaa' } }, ci.bd) : null
+        return e('div', { style: { background: 'rgba(0,0,0,0.9)', borderRadius: 6, padding: 8, minWidth: 110, border: '1px solid #c9a227' } },
+          e('div', { style: { fontWeight: 'bold', fontSize: '0.85rem', marginBottom: 3, color: COLORS[card.type] } }, card.name),
+          e('div', { style: { fontSize: '0.7rem', marginBottom: 4 } },
+            fc ? e('span', { style: { color: '#4caf50' } }, 'FREE (chain)') : e('span', { style: { color: canAff ? '#fff' : '#ff6b6b' } }, 'Cost: ' + ci.total + '💰')
           ),
           prodEl,
-          e('button', { onClick: buildCard, disabled: !canAff, style: { width: '100%', padding: '5px', fontSize: '0.8rem', background: canAff ? '#4caf50' : '#555', border: 'none', borderRadius: 4, color: '#fff', cursor: canAff ? 'pointer' : 'not-allowed', fontWeight: 'bold', marginBottom: 3 } }, 'Build Card'),
-          selWonder !== null ? e('button', { onClick: buildWonder, disabled: !canBuildWonder, style: { width: '100%', padding: '5px', fontSize: '0.8rem', background: canBuildWonder ? '#6b8e23' : '#555', border: 'none', borderRadius: 4, color: '#fff', cursor: canBuildWonder ? 'pointer' : 'not-allowed', fontWeight: 'bold', marginBottom: 3 } }, 'Build Wonder (' + wonderCost.total + '💰)') : null,
-          e('button', { onClick: discardCard, style: { width: '100%', padding: '5px', fontSize: '0.8rem', background: '#8b4513', border: 'none', borderRadius: 4, color: '#fff', cursor: 'pointer' } }, 'Discard (+' + (2 + yc) + '💰)')
+          e('button', { onClick: buildCard, disabled: !canAff, style: { width: '100%', padding: '6px', fontSize: '0.75rem', background: canAff ? '#4caf50' : '#555', border: 'none', borderRadius: 4, color: '#fff', cursor: canAff ? 'pointer' : 'not-allowed', fontWeight: 'bold', marginBottom: 4 } }, 'Build Card'),
+          selWonder !== null ? e('button', { onClick: buildWonder, disabled: !canBuildWonder, style: { width: '100%', padding: '6px', fontSize: '0.75rem', background: canBuildWonder ? '#6b8e23' : '#555', border: 'none', borderRadius: 4, color: '#fff', cursor: canBuildWonder ? 'pointer' : 'not-allowed', fontWeight: 'bold', marginBottom: 4 } }, 'Build Wonder (' + wonderCost.total + '💰)') : null,
+          e('button', { onClick: discardCard, style: { width: '100%', padding: '6px', fontSize: '0.75rem', background: '#8b4513', border: 'none', borderRadius: 4, color: '#fff', cursor: 'pointer' } }, 'Discard (+' + (2 + yc) + '💰)')
         );
       }
 
@@ -549,23 +582,23 @@
         var title = game.vt === 'military' ? '⚔ Military Victory!' : game.vt === 'science' ? '🔬 Science Victory!' : 'Game Over!';
         var winnerText = game.winner ? (vsAI ? (game.winner === 1 ? 'You Win!' : 'AI Wins!') : 'Player ' + game.winner + ' Wins!') : 'Tie!';
         return e('div', { style: { position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.92)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 10 } },
-          e('h2', { style: { fontSize: '1.5rem', marginBottom: 10, color: '#c9a227' } }, title),
-          e('p', { style: { fontSize: '1.2rem', color: game.winner ? 'gold' : '#aaa', marginBottom: 15 } }, winnerText),
+          e('h2', { style: { fontSize: '1.4rem', marginBottom: 10, color: '#c9a227' } }, title),
+          e('p', { style: { fontSize: '1.1rem', color: game.winner ? 'gold' : '#aaa', marginBottom: 15 } }, winnerText),
           e('div', { style: { display: 'flex', gap: 20, marginBottom: 20 } },
-            e('div', { style: { background: 'rgba(201,162,39,0.2)', padding: 12, borderRadius: 8, minWidth: 140 } },
-              e('h3', { style: { fontSize: '1rem', color: '#c9a227' } }, vsAI ? 'You' : 'P1'),
-              e('div', { style: { fontSize: '1.5rem', fontWeight: 'bold', color: 'gold' } }, p1p + '★'),
-              e('div', { style: { fontSize: '0.8rem', color: '#aaa' } }, '💰' + game.p1.coins + ' 🏛' + game.p1.wonders.filter(function(w) { return w.built; }).length + ' 🃏' + game.p1.cards.length)
+            e('div', { style: { background: 'rgba(201,162,39,0.2)', padding: 10, borderRadius: 8, minWidth: 120 } },
+              e('h3', { style: { fontSize: '0.9rem', color: '#c9a227' } }, vsAI ? 'You' : 'P1'),
+              e('div', { style: { fontSize: '1.4rem', fontWeight: 'bold', color: 'gold' } }, p1p + '★'),
+              e('div', { style: { fontSize: '0.7rem', color: '#aaa' } }, '💰' + game.p1.coins + ' 🏛' + game.p1.wonders.filter(function(w) { return w.built; }).length + ' 🃏' + game.p1.cards.length)
             ),
-            e('div', { style: { background: 'rgba(139,69,19,0.2)', padding: 12, borderRadius: 8, minWidth: 140 } },
-              e('h3', { style: { fontSize: '1rem', color: '#8b4513' } }, vsAI ? 'AI' : 'P2'),
-              e('div', { style: { fontSize: '1.5rem', fontWeight: 'bold', color: '#daa520' } }, p2p + '★'),
-              e('div', { style: { fontSize: '0.8rem', color: '#aaa' } }, '💰' + game.p2.coins + ' 🏛' + game.p2.wonders.filter(function(w) { return w.built; }).length + ' 🃏' + game.p2.cards.length)
+            e('div', { style: { background: 'rgba(139,69,19,0.2)', padding: 10, borderRadius: 8, minWidth: 120 } },
+              e('h3', { style: { fontSize: '0.9rem', color: '#8b4513' } }, vsAI ? 'AI' : 'P2'),
+              e('div', { style: { fontSize: '1.4rem', fontWeight: 'bold', color: '#daa520' } }, p2p + '★'),
+              e('div', { style: { fontSize: '0.7rem', color: '#aaa' } }, '💰' + game.p2.coins + ' 🏛' + game.p2.wonders.filter(function(w) { return w.built; }).length + ' 🃏' + game.p2.cards.length)
             )
           ),
           e('div', { style: { display: 'flex', gap: 10 } },
-            e('button', { onClick: startGame, style: { padding: '12px 30px', fontSize: '1rem', background: 'linear-gradient(135deg,#8b6914,#c9a227)', border: '2px solid #f4e4c1', borderRadius: 6, color: '#2c1810', fontWeight: 'bold', cursor: 'pointer' } }, 'Play Again'),
-            e('button', { onClick: function() { setShowEnd(false); }, style: { padding: '12px 20px', fontSize: '0.9rem', background: '#555', border: '2px solid #888', borderRadius: 6, color: '#fff', cursor: 'pointer' } }, 'View Board')
+            e('button', { onClick: startGame, style: { padding: '10px 25px', fontSize: '0.95rem', background: 'linear-gradient(135deg,#8b6914,#c9a227)', border: '2px solid #f4e4c1', borderRadius: 6, color: '#2c1810', fontWeight: 'bold', cursor: 'pointer' } }, 'Play Again'),
+            e('button', { onClick: function() { setShowEnd(false); }, style: { padding: '10px 18px', fontSize: '0.85rem', background: '#555', border: '2px solid #888', borderRadius: 6, color: '#fff', cursor: 'pointer' } }, 'View Board')
           )
         );
       }
@@ -573,21 +606,31 @@
       var rem = game.pyr.filter(function(p) { return !p.t; }).length;
 
       return e('div', { style: { height: '100%', display: 'flex', flexDirection: 'column', color: '#f4e4c1', overflow: 'hidden', position: 'relative' } },
+        // Header
         e('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '3px 8px', background: 'rgba(0,0,0,0.3)' } },
-          e('span', { style: { fontWeight: 'bold', fontSize: '0.9rem' } }, aiThink ? '🤖 Thinking...' : 'Age ' + game.age + ' • ' + (vsAI ? (game.turn === 1 ? 'Your turn' : 'AI') : 'P' + game.turn)),
-          e('div', { style: { display: 'flex', gap: 8, alignItems: 'center', fontSize: '0.8rem' } },
+          e('span', { style: { fontWeight: 'bold', fontSize: '0.85rem' } }, aiThink ? '🤖 Thinking...' : 'Age ' + game.age + ' • ' + (vsAI ? (game.turn === 1 ? 'Your turn' : 'AI') : 'P' + game.turn)),
+          e('div', { style: { display: 'flex', gap: 8, alignItems: 'center', fontSize: '0.75rem' } },
             e('span', null, '🃏' + rem),
-            e('button', { onClick: function() { setGame(null); }, style: { padding: '2px 6px', background: '#8b4513', border: '1px solid #c9a227', borderRadius: 4, color: '#fff', cursor: 'pointer', fontSize: '0.75rem' } }, 'Menu')
+            e('button', { onClick: function() { setGame(null); }, style: { padding: '2px 6px', background: '#8b4513', border: '1px solid #c9a227', borderRadius: 4, color: '#fff', cursor: 'pointer', fontSize: '0.7rem' } }, 'Menu')
           )
         ),
-        msg ? e('div', { style: { textAlign: 'center', padding: 2, background: 'rgba(201,162,39,0.3)', fontSize: '0.8rem' } }, msg) : null,
+        // Message
+        msg ? e('div', { style: { textAlign: 'center', padding: 2, background: 'rgba(201,162,39,0.3)', fontSize: '0.75rem' } }, msg) : null,
+        // Military track
         e(Mil),
-        e('div', { style: { display: 'flex', gap: 4, padding: '0 4px' } }, e(Panel, { pNum: 1 }), e(Panel, { pNum: 2 })),
-        e('div', { style: { flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'flex-start', gap: 8, padding: 6, overflow: 'auto' } },
-          e('div', { style: { position: 'relative', width: pyrW, height: pyrH } },
-            game.pyr.map(function(pos, i) { return e(PCard, { key: i, pos: pos }); })
+        // Main content: panels on sides, pyramid in middle
+        e('div', { style: { flex: 1, display: 'flex', overflow: 'hidden', padding: '0 4px' } },
+          // Left panel (Player 1)
+          e('div', { style: { width: '22%', minWidth: 100, overflow: 'auto' } }, e(Panel, { pNum: 1 })),
+          // Center: pyramid and action panel
+          e('div', { style: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', overflow: 'auto', padding: '4px' } },
+            e('div', { style: { position: 'relative', width: pyrW, height: pyrH, marginBottom: 8 } },
+              game.pyr.map(function(pos, i) { return e(PCard, { key: i, pos: pos }); })
+            ),
+            e(ActPanel)
           ),
-          e(ActPanel)
+          // Right panel (Player 2 / AI)
+          e('div', { style: { width: '22%', minWidth: 100, overflow: 'auto' } }, e(Panel, { pNum: 2 }))
         ),
         e(EndScreen)
       );
