@@ -1,21 +1,46 @@
-const CACHE_NAME = '7wonders-duel-v8';
+const CACHE_NAME = '7wonders-duel-v9';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './manifest.json',
-  './icon-192.svg',
-  './icon-512.svg'
+  './icon-192.png',
+  './icon-512.png'
 ];
 
-// Install event - cache all assets
+const CDN_ASSETS = [
+  'https://unpkg.com/react@18/umd/react.production.min.js',
+  'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js'
+];
+
+// Install event - cache all assets including CDN
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      console.log('Caching app assets');
-      return cache.addAll(ASSETS_TO_CACHE);
-    })
+    caches.open(CACHE_NAME)
+      .then((cache) => {
+        console.log('Caching local assets');
+        return cache.addAll(ASSETS_TO_CACHE);
+      })
+      .then(() => {
+        return caches.open(CACHE_NAME).then((cache) => {
+          console.log('Caching CDN assets');
+          return Promise.all(
+            CDN_ASSETS.map((url) => {
+              return fetch(url, { mode: 'cors' })
+                .then((response) => {
+                  if (response.ok) {
+                    return cache.put(url, response);
+                  }
+                  throw new Error('Failed to fetch ' + url);
+                })
+                .catch((err) => {
+                  console.warn('Could not cache CDN asset:', url, err);
+                });
+            })
+          );
+        });
+      })
+      .then(() => self.skipWaiting())
   );
-  self.skipWaiting();
 });
 
 // Activate event - clean up old caches
@@ -30,32 +55,37 @@ self.addEventListener('activate', (event) => {
           }
         })
       );
-    })
+    }).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 // Fetch event - serve from cache, fallback to network
 self.addEventListener('fetch', (event) => {
   event.respondWith(
-    caches.match(event.request).then((response) => {
-      if (response) {
-        return response;
-      }
-      return fetch(event.request).then((response) => {
-        if (!response || response.status !== 200 || event.request.method !== 'GET') {
+    caches.match(event.request)
+      .then((response) => {
+        if (response) {
+          console.log('Serving from cache:', event.request.url);
           return response;
         }
-        const responseToCache = response.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache);
+        
+        return fetch(event.request).then((networkResponse) => {
+          // Cache successful responses for future offline use
+          if (networkResponse && networkResponse.status === 200) {
+            const responseClone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseClone);
+            });
+          }
+          return networkResponse;
         });
-        return response;
-      }).catch(() => {
-        if (event.request.destination === 'document') {
+      })
+      .catch((err) => {
+        console.log('Fetch failed, offline:', event.request.url);
+        // Return a basic offline page if we can't serve the request
+        if (event.request.mode === 'navigate') {
           return caches.match('./index.html');
         }
-      });
-    })
+      })
   );
 });
