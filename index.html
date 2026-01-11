@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+     <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -457,16 +457,21 @@
       function Panel(props) {
         var pNum = props.pNum;
         var p = pNum === 1 ? game.p1 : game.p2;
+        var opp = pNum === 1 ? game.p2 : game.p1;
         var prod = getProd(p.cards, p.wonders);
         var isAct = game.turn === pNum && !game.gameOver;
         var prodStr = Object.keys(prod).filter(function(k) { return prod[k] > 0; }).map(function(k) { return prod[k] + RES[k]; }).join(' ') || '-';
         
+        // Calculate running score
+        var currentScore = calcPts(p, opp, pNum === 1 ? game.mil : -game.mil);
+        
         return e('div', { style: { background: isAct ? 'rgba(201,162,39,0.15)' : 'rgba(0,0,0,0.2)', borderRadius: 6, padding: 6, border: isAct ? '2px solid #c9a227' : '1px solid #444', flex: 1 } },
-          e('div', { style: { display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: 4 } },
+          e('div', { style: { display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: 2 } },
             e('span', null, vsAI ? (pNum === 1 ? 'You' : '🤖 AI') : 'P' + pNum),
             e('span', null, p.coins + '💰')
           ),
-          e('div', { style: { fontSize: '0.75rem', marginBottom: 6 } }, 'Produces: ' + prodStr),
+          e('div', { style: { fontSize: '1rem', fontWeight: 'bold', color: '#ffd700', marginBottom: 4, textAlign: 'center', background: 'rgba(0,0,0,0.3)', borderRadius: 4, padding: '2px 0' } }, currentScore + ' ★'),
+          e('div', { style: { fontSize: '0.7rem', marginBottom: 4 } }, 'Produces: ' + prodStr),
           e('div', { style: { fontSize: '0.7rem', fontWeight: 'bold', color: '#c9a227', marginBottom: 4 } }, 'Wonders:'),
           e('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
             p.wonders.map(function(w, i) {
